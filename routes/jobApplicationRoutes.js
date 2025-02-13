@@ -5,6 +5,7 @@ const { generateToken, authMiddleware } = require("./../middlewares/authMiddlewa
 const Job = require("./../models/job");
 const JobApplication = require("./../models/jobApplication");
 const { findById } = require("../models/user");
+const jobApplication = require("./../models/jobApplication");
 
 
 // Apply for a job
@@ -111,5 +112,38 @@ router.get("/my-applications", authMiddleware, async (req, res) => {
         res.status(500).json({msg: "Internal server error"});
     }
 });
+
+
+// Update applications status (employers only)
+router.put("/:applicationId/status", authMiddleware, async (req, res) => {
+    try {
+        const {applicationId} = req.params;
+        const {status} = req.body;
+
+        // Check if jobId is valid mongoDB objectId
+        if(!mongoose.Types.ObjectId.isValid(applicationId)) {
+            return res.status(400).json({msg: "Invalid application ID"})
+        }
+
+        // Find the job application
+        const application = await JobApplication.findById(applicationId).populate("jobId");
+        if(!application) return res.status(404).json({msg: "No application found"});
+
+        // Ensure only the employer who posted the job can update the application status
+        if(req.user.role !== "employer" || application.jobId.employerId.toString() !== req.user.id) {
+            return res.status(403).json({msg: "Unauthorized, You cannot update this application"});
+        }
+
+        // Update the application status
+        application.status = status;
+        await application.save();
+
+        res.status(200).json({msg: "Application status updated successfully", application});
+
+    } catch (error) {
+        console.log("Error updating applications status", error);
+        res.status(500).json({msg: "Internal server error"});
+    }
+}); 
 
 module.exports = router;
