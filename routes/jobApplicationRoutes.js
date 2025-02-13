@@ -120,7 +120,7 @@ router.put("/:applicationId/status", authMiddleware, async (req, res) => {
         const {applicationId} = req.params;
         const {status} = req.body;
 
-        // Check if jobId is valid mongoDB objectId
+        // Check if applicationId is valid mongoDB objectId
         if(!mongoose.Types.ObjectId.isValid(applicationId)) {
             return res.status(400).json({msg: "Invalid application ID"})
         }
@@ -144,6 +144,44 @@ router.put("/:applicationId/status", authMiddleware, async (req, res) => {
         console.log("Error updating applications status", error);
         res.status(500).json({msg: "Internal server error"});
     }
-}); 
+});
+
+
+// Delete Job application (employer only)
+router.delete("/:applicationId", authMiddleware, async (req, res) => {
+    try {
+        const {applicationId} = req.params;
+        const userId = req.user.id;
+
+        // Check is applicationId is valid mongoDB objectId
+        if(!mongoose.Types.ObjectId.isValid(applicationId)) {
+            return res.status(400).json({msg: "Invalid application ID"});
+        }
+
+        // Find the job application
+        const application = await JobApplication.findById(applicationId);
+        if(!application) return res.status(404).json({msg: "Job application not found"});
+
+        // Ensure only the jobseeker who applied can delete their appplication
+        if(application.applicationId.toString() !== userId) {
+            return res.status(403).json({msg: "You can delete your own application"});
+        }
+
+        // Check if application in deletable state
+        // You might prevent deletion of accepted application
+        if(application.status === "accepted") {
+            return res.status(400).json({msg: "Cannot delete an accepted application"});
+        }
+
+        // Delete an application
+        await JobApplication.findByIdAndDelete(applicationId);
+
+        res.status(200).json({msg: "Job application deleted successfully"});
+
+    } catch (error) {
+        console.log("Error deleting job application", error);
+        res.status(500).json("Internal server error");
+    }
+});
 
 module.exports = router;
